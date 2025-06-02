@@ -4,52 +4,43 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 
 dotenv.config();
-
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const TIMEOUT_MS = 500;
 
 app.use(cors());
 
 app.get('/numbers', async (req, res) => {
-  const rawUrlString = process.env.URLS || '';
-  const urls = rawUrlString
-    .split(',')
-    .map(u => u.trim())
-    .filter(Boolean); // remove empty strings
+  const urls = process.env.URLS?.split(',').map(url => url.trim()) || [];
+  const token = process.env.ACCESS_TOKEN;
 
-  const accessToken = process.env.ACCESS_TOKEN;
-
-  if (urls.length === 0) {
-    return res.status(400).json({ error: 'No URLs provided in .env' });
-  }
+  if (!urls.length) return res.status(400).json({ error: 'No URLs configured.' });
 
   const fetchPromises = urls.map(url =>
     axios.get(url, {
       timeout: TIMEOUT_MS,
       headers: {
-        Authorization: `Bearer ${accessToken}`, // Add token if required
+        Authorization: `Bearer ${token}`,
       },
-    })
-    .then(res => Array.isArray(res.data.numbers) ? res.data.numbers : [])
-    .catch(err => {
-      console.error(`Error fetching ${url}:`, err.message);
+    }).then(response =>
+      Array.isArray(response.data.numbers) ? response.data.numbers : []
+    ).catch(err => {
+      console.error(`Error fetching ${url}: ${err.message}`);
       return [];
     })
   );
 
   try {
     const results = await Promise.all(fetchPromises);
-    const merged = results.flat();
-    const uniqueSorted = [...new Set(merged)].sort((a, b) => a - b);
+    const combined = results.flat();
+    const uniqueSorted = [...new Set(combined)].sort((a, b) => a - b);
 
     res.json({ numbers: uniqueSorted });
   } catch (err) {
-    console.error('Unexpected server error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(` Server running on http://localhost:${PORT}`);
 });
